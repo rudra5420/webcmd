@@ -48,3 +48,14 @@ benchmarks/datasets/*.json
 !benchmarks/datasets/Stealth_Webcmd.json
 benchmarks/.playwright-cli/
 benchmarks/.playwright/
+
+# Python & Runtime Artifacts
+.venv/
+**/__pycache__/
+*.pyc
+.pytest_cache/
+downloads/
+python_orchestrator/.venv/
+python_orchestrator/**/__pycache__/
+python_orchestrator/.pytest_cache/
+python_orchestrator/downloads/

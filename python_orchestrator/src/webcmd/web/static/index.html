@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>WebCMD — Intent-Driven Self-Healing Web Runtime</title>
+  <link rel="stylesheet" href="/static/style.css" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="navbar">
+      <div class="brand">
+        <div class="logo-icon">⚡</div>
+        <div>
+          <div class="logo-title">WebCMD <span class="badge-version">v0.1.0</span></div>
+          <div class="logo-subtitle">Verified, Reusable, Self-Healing Digital Workflows</div>
+        </div>
+      </div>
+      <div class="navbar-right">
+        <div class="connection-status" id="ws-status">
+          <span class="status-dot disconnected" id="ws-dot"></span>
+          <span id="ws-status-text">Connecting...</span>
+        </div>
+        <button class="btn btn-secondary btn-sm" id="btn-refresh-data" title="Refresh state">↻ Sync</button>
+      </div>
+    </header>
+
+    <!-- Landing Mission Banner -->
+    <section class="hero-banner">
+      <p class="mission-statement">
+        <strong>WebCMD</strong> turns natural-language intent into verified, reusable, self-healing digital workflows with strict human verification gating and memory.
+      </p>
+    </section>
+
+    <!-- Task Input Section -->
+    <section class="card task-input-card">
+      <form id="task-form">
+        <div class="input-header">
+          <label for="task-input" class="label-heading">What do you want WebCMD to do?</label>
+          <div class="auto-approve-toggle">
+            <label class="checkbox-label" title="Automatically confirm without waiting at the final human gate (for headless automation)">
+              <input type="checkbox" id="auto-approve-checkbox" />
+              <span>Auto-Confirm Gate</span>
+            </label>
+          </div>
+        </div>
+        <div class="input-row">
+          <textarea
+            id="task-input"
+            rows="2"
+            placeholder='Example: "Download the latest monthly report, verify it, and save it locally."'
+            required
+          ></textarea>
+          <button type="submit" id="btn-run" class="btn btn-primary">
+            <span class="btn-icon">▶</span> Run Task
+          </button>
+        </div>
+        <div class="examples-row">
+          <span class="examples-label">Examples:</span>
+          <button type="button" class="chip" data-task="Download the latest monthly report, verify it, and save it locally.">Download monthly report</button>
+          <button type="button" class="chip" data-task="Go to example.com and verify the login portal">Verify login portal</button>
+          <button type="button" class="chip" data-task="Extract customer records and verify format">Extract customer records</button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Human Verification Gate Banner (Conditional / Dynamic) -->
+    <section class="card human-verification-gate hidden" id="human-verification-gate">
+      <div class="gate-header">
+        <div class="gate-title-badge">
+          <span class="pulse-icon">⚠️</span> FINAL VERIFICATION REQUIRED
+        </div>
+        <div class="gate-subtitle">Exactly one final human approval gate before task completion and memory persistence.</div>
+      </div>
+      <div class="gate-body">
+        <div class="gate-info-grid">
+          <div class="gate-info-box">
+            <span class="info-label">Task Objective</span>
+            <div class="info-value" id="gate-task-desc">—</div>
+          </div>
+          <div class="gate-info-box">
+            <span class="info-label">Automated Verification Checks</span>
+            <div class="info-value pass-text" id="gate-checks">
+              <div>✓ Intent objective verified</div>
+              <div>✓ Preconditions and postconditions satisfied</div>
+              <div>✓ Execution integrity validated</div>
+              <div>✓ Checkpoint saved: PRE_HUMAN_VERIFICATION</div>
+            </div>
+          </div>
+        </div>
+        <div class="gate-result-box">
+          <span class="info-label">WebCMD Execution Result</span>
+          <pre class="code-block" id="gate-result-output">—</pre>
+        </div>
+        <div class="gate-prompt-text">Are you satisfied with this execution result?</div>
+        <div class="gate-actions">
+          <button class="btn btn-confirm" id="btn-confirm-gate">
+            <span class="btn-icon">✓</span> CONFIRM RESULT (Complete &amp; Learn)
+          </button>
+          <button class="btn btn-reject" id="btn-reject-gate">
+            <span class="btn-icon">✗</span> REJECT RESULT (Recovery / Review)
+          </button>
+        </div>
+
+        <!-- Rejection Feedback Expandable Box -->
+        <div class="rejection-box hidden" id="rejection-box">
+          <label for="rejection-reason" class="label-heading">What was wrong with the result?</label>
+          <textarea id="rejection-reason" rows="2" placeholder="e.g. Exported wrong date range or selector matched incorrect element..."></textarea>
+          <div class="rejection-actions">
+            <button class="btn btn-warning" id="btn-submit-rejection">Submit Rejection &amp; Escalate</button>
+            <button class="btn btn-secondary" id="btn-cancel-rejection">Cancel</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Active Execution Overview -->
+    <section class="card active-execution-card">
+      <div class="card-header">
+        <div>
+          <span class="card-title">ACTIVE EXECUTION</span>
+          <span class="exec-id-mono" id="current-exec-id">No active execution</span>
+        </div>
+        <div class="exec-controls">
+          <button class="btn btn-secondary btn-sm" id="btn-cancel-exec" disabled>Cancel</button>
+        </div>
+      </div>
+
+      <div class="exec-meta-grid">
+        <div class="meta-item">
+          <span class="meta-label">Current Task</span>
+          <span class="meta-value" id="current-task-text">Enter a task above to begin</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Status</span>
+          <span class="status-pill status-idle" id="current-status-pill">IDLE</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Current Worker</span>
+          <span class="meta-value worker-highlight" id="current-worker-name">MockWorker</span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-label">Step Progress</span>
+          <span class="meta-value" id="current-step-progress">0 / 0</span>
+        </div>
+      </div>
+
+      <!-- Canonical Lifecycle Stepper -->
+      <div class="lifecycle-container">
+        <div class="lifecycle-label">CANONICAL EXECUTION TIMELINE</div>
+        <div class="timeline-stepper" id="timeline-stepper">
+          <!-- Dynamically populated 12 stages -->
+        </div>
+      </div>
+    </section>
+
+    <!-- Multi-Column Visualization Grid -->
+    <div class="dashboard-grid">
+      <!-- Left Column: Memory & Workflows -->
+      <div class="grid-column">
+        <!-- Experiential Site Memory -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-title">SITE &amp; EXPERIENTIAL MEMORY</span>
+            <span class="confidence-badge" id="memory-confidence-badge">Confidence: 0.00</span>
+          </div>
+          <div class="memory-content" id="memory-content">
+            <div class="meta-row">
+              <span class="meta-label">Domain:</span>
+              <span class="meta-value" id="mem-domain">example.test</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Last Visit:</span>
+              <span class="meta-value" id="mem-last-visit">Just now</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Known Workflow:</span>
+              <span class="meta-value" id="mem-known-workflow">download_report</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Previous Recovery:</span>
+              <span class="meta-value" id="mem-previous-recovery">"Download" → "Export Report"</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Last Verified:</span>
+              <span class="meta-value" id="mem-last-verified">Today (Human Confirmed)</span>
+            </div>
+            <div class="confidence-meter-container">
+              <span class="meta-label">Confidence Score</span>
+              <div class="meter-bar">
+                <div class="meter-fill" id="meter-fill" style="width: 0%;"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- Learned Workflows -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-title">WORKFLOW ENGINE</span>
+            <span class="badge-mode" id="workflow-mode">Deterministic</span>
+          </div>
+          <div class="workflow-content" id="workflow-content">
+            <div class="meta-row">
+              <span class="meta-label">Workflow:</span>
+              <span class="meta-value" id="wf-name">default_pipeline</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Version:</span>
+              <span class="meta-value" id="wf-version">v1.0.0</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Created From:</span>
+              <span class="meta-value" id="wf-created-from">Verified Execution</span>
+            </div>
+            <div class="stats-grid">
+              <div class="stat-box">
+                <div class="stat-num" id="stat-successful-runs">1</div>
+                <div class="stat-lbl">Successful Runs</div>
+              </div>
+              <div class="stat-box">
+                <div class="stat-num" id="stat-recovery-runs">0</div>
+                <div class="stat-lbl">Recovery Runs</div>
+              </div>
+            </div>
+          </div>
+        </section>
+      </div>
+
+      <!-- Right Column: Recovery, Checkpoint, Security -->
+      <div class="grid-column">
+        <!-- Recovery Visualization -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-title">RECOVERY &amp; SELF-HEALING</span>
+            <span class="status-pill status-idle" id="recovery-status-badge">Standby</span>
+          </div>
+          <div class="recovery-content" id="recovery-content">
+            <div class="recovery-box-divergence">
+              <div class="div-row">
+                <span class="meta-label">Expected:</span>
+                <span class="meta-value" id="rec-expected">#btn-download ("Download Report")</span>
+              </div>
+              <div class="div-row">
+                <span class="meta-label">Observed:</span>
+                <span class="meta-value" id="rec-observed">Element not found / DOM changed</span>
+              </div>
+            </div>
+            <div class="recovery-strategy-box">
+              <div class="meta-label">Recovery Action Taken:</div>
+              <div class="strategy-text" id="rec-strategy">Re-observe DOM → Semantic ARIA locator adaptation</div>
+            </div>
+            <div class="recovery-outcome" id="rec-outcome">
+              ✓ Ready for autonomous adaptation if needed
+            </div>
+          </div>
+        </section>
+
+        <!-- Checkpoint & Resume -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-title">CHECKPOINT &amp; RESUME</span>
+            <span class="status-pill status-success" id="checkpoint-state-badge">Atomic</span>
+          </div>
+          <div class="checkpoint-content">
+            <div class="meta-row">
+              <span class="meta-label">Latest Checkpoint:</span>
+              <span class="meta-value mono-text" id="cp-latest-id">None</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Trigger:</span>
+              <span class="meta-value" id="cp-trigger">—</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">State Hash:</span>
+              <span class="meta-value mono-text" id="cp-hash">—</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Environment:</span>
+              <span class="meta-value pass-text" id="cp-env-status">VALID (Integrity Verified)</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Resume Status:</span>
+              <span class="meta-value" id="cp-resume-status">Available on restart</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- Security & Policy -->
+        <section class="card">
+          <div class="card-header">
+            <span class="card-title">SECURITY &amp; POLICY</span>
+            <span class="status-pill status-success">ACTIVE</span>
+          </div>
+          <div class="security-content">
+            <div class="meta-row">
+              <span class="meta-label">Policy Status:</span>
+              <span class="meta-value pass-text">ACTIVE (Rules Enforced)</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Credential Vault:</span>
+              <span class="meta-value">Available through secure reference</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Raw Secrets:</span>
+              <span class="meta-value pass-text">Never displayed (Redacted)</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Current Action Risk:</span>
+              <span class="meta-value status-low-risk" id="sec-risk-level">LOW (Read/Execute)</span>
+            </div>
+            <div class="meta-row">
+              <span class="meta-label">Privilege Escalation:</span>
+              <span class="meta-value pass-text">Hard LLM Boundary (T0 Authority)</span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+
+    <!-- Live Execution Logs -->
+    <section class="card logs-card">
+      <div class="card-header">
+        <span class="card-title">LIVE EVENT STREAM &amp; AUDIT LOG</span>
+        <div class="log-controls">
+          <button class="btn btn-secondary btn-sm" id="btn-clear-logs">Clear</button>
+        </div>
+      </div>
+      <div class="logs-container" id="logs-container">
+        <div class="log-entry log-dim">[System ready. Enter a task or connect to monitor live execution.]</div>
+      </div>
+    </section>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

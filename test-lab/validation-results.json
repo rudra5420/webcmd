@@ -1,0 +1,314 @@
+{
+  "timestamp": "2026-09-12T06:55:36.751Z",
+  "environment": {
+    "node": "v24.16.0",
+    "os": "win32",
+    "arch": "x64",
+    "cli": "webcmd v0.8.4",
+    "browser": "CloakBrowser Chromium 146.0.7680.177.5 (bundled)"
+  },
+  "tests": {
+    "test1_basic_tasks": [
+      {
+        "name": "1.1 Simple Navigation",
+        "passed": true,
+        "duration": 1584,
+        "result": {
+          "title": "Test Lab - Version A (Stable)",
+          "url": "http://127.0.0.1:9888/version-a"
+        }
+      },
+      {
+        "name": "1.2 Text Extraction",
+        "passed": true,
+        "duration": 957,
+        "result": {
+          "heading": "Enterprise Portal - Version A"
+        }
+      },
+      {
+        "name": "1.3 Form Input Fill",
+        "passed": true,
+        "duration": 1011,
+        "result": {
+          "val": "analyst_test"
+        }
+      },
+      {
+        "name": "1.4 Password Redaction Check",
+        "passed": true,
+        "duration": 940,
+        "result": {
+          "ok": true
+        }
+      },
+      {
+        "name": "1.5 Form Submit & Navigation",
+        "passed": true,
+        "duration": 972,
+        "result": {
+          "url": "http://127.0.0.1:9888/version-a/dashboard?username=admin&password=[REDACTED]",
+          "title": "Dashboard - Version A"
+        }
+      },
+      {
+        "name": "1.6 Dynamic Button Click",
+        "passed": true,
+        "duration": 917,
+        "result": {
+          "text": "August Report Found"
+        }
+      },
+      {
+        "name": "1.7 Table Data Scraping",
+        "passed": true,
+        "duration": 1015,
+        "result": {
+          "rowCount": 2
+        }
+      },
+      {
+        "name": "1.8 Direct Download Link Retrieval",
+        "passed": true,
+        "duration": 987,
+        "result": {
+          "href": "/version-a/download/august-report.csv"
+        }
+      },
+      {
+        "name": "1.9 External Public Safe Site Navigation",
+        "passed": true,
+        "duration": 1109,
+        "result": {
+          "title": "Example Domain",
+          "heading": "Example Domain"
+        }
+      },
+      {
+        "name": "1.10 DOM Attribute & State Query",
+        "passed": true,
+        "duration": 1025,
+        "result": {
+          "status": "operational"
+        }
+      }
+    ],
+    "test2_multi_step": [
+      {
+        "name": "2.1 End-to-End Login -> Dashboard -> Search -> Download URL",
+        "passed": true,
+        "duration": 1077,
+        "result": {
+          "finalUrl": "http://127.0.0.1:9888/version-a/dashboard?username=exec_user&password=[REDACTED]",
+          "reportLink": "/version-a/download/august-report.csv"
+        }
+      },
+      {
+        "name": "2.2 Dynamic Loading & Element Appearance (Version C)",
+        "passed": true,
+        "duration": 2758,
+        "result": {
+          "text": "August Financial Audit Complete",
+          "link": "/version-a/download/august-report.csv"
+        }
+      },
+      {
+        "name": "2.3 Multi-Page State Retention",
+        "passed": true,
+        "duration": 1075,
+        "result": {
+          "dashboardTitle": "Dashboard - Version A",
+          "cookieCount": "[REDACTED]"
+        }
+      },
+      {
+        "name": "2.4 CSV File Download Verification",
+        "passed": true,
+        "duration": 908,
+        "result": {
+          "status": 200,
+          "hasRevenue": true,
+          "lines": 2
+        }
+      },
+      {
+        "name": "2.5 Search and Validate Operational Status",
+        "passed": true,
+        "duration": 2191,
+        "result": {
+          "statusText": "System Status: All Systems Operational",
+          "searchRes": "August Report Found"
+        }
+      }
+    ],
+    "test3_interruption_resume": [
+      {
+        "point": "During Navigation",
+        "passed": true,
+        "duration": 931
+      },
+      {
+        "point": "During Form Typing",
+        "passed": true,
+        "duration": 887
+      },
+      {
+        "point": "During Network Wait",
+        "passed": true,
+        "duration": 869
+      },
+      {
+        "point": "During Element Selection",
+        "passed": true,
+        "duration": 925
+      },
+      {
+        "point": "During Post-Action Verification",
+        "passed": true,
+        "duration": 893
+      }
+    ],
+    "test4_ui_change_adaptation": {
+      "versionA": {
+        "found": true,
+        "text": "Download Report"
+      },
+      "versionB": {
+        "adapted": true,
+        "strategy": "aria_regex_name",
+        "targetText": "Export Report",
+        "href": "/version-a/download/august-report.csv"
+      },
+      "passed": true
+    },
+    "test5_memory_exploration_vs_reuse": {
+      "coldDurationMs": 1981,
+      "warmDurationMs": 922,
+      "speedupPercent": "53.5",
+      "passed": true
+    },
+    "test6_freshness_cas": {
+      "casProtected": true,
+      "revision": "0000000000000000000000000000000000000000"
+    },
+    "test7_failure_pattern_memory": {
+      "passed": true,
+      "output": "{\n  \"id\": \"20260912T065608Z-6bac19c7-d0e2-489a-8d5a-742f50fec587\",\n  \"domain\": \"testlab.test\",\n  \"hostname\": \"testlab.test\",\n  \"observedAt\": \"2026-09-12T06:56:08.592Z\",\n  \"observedDateUtc\": \"2026-09-12\",\n  \"kind\": \"repeated_mistake\",\n  \"claim\": \"Export button renamed\",\n  \"consequence\": \"Adapt locator to avoid timeout\",\n  \"status\": \"pending\"\n}"
+    },
+    "test8_recovery_budget": {
+      "passed": true,
+      "attempts": 3
+    },
+    "test9_intermittent_outage": {
+      "passed": true,
+      "attempts": 2,
+      "data": {
+        "success": true,
+        "report": "August Audit Data",
+        "attempt": 4
+      }
+    },
+    "test10_auth_recovery": {
+      "passed": true,
+      "result": {
+        "initialAuth": true,
+        "intercepted401": true,
+        "recovered": true
+      }
+    },
+    "test11_worker_routing": {
+      "passed": true,
+      "worker": "http_direct"
+    },
+    "test12_crash_isolation": {
+      "passed": true,
+      "stdout": "[OK] Daemon: running on port 9777 (v0.8.4) | [OK] Runtime: cloak connected (v0.4.5) | [OK] Selected browser: Cloak (bundled default) | [OK] Browser binary: installed at C:\\Users\\rudra\\.cloakbrowser\\chromium-146.0.7680.177.5\\chrome.exe | [OK] Connectivity: connected in 0.1s"
+    },
+    "test13_truth_engine": {
+      "passed": true,
+      "assertions": {
+        "textMatch": true,
+        "visibleMatch": true,
+        "noError": true
+      }
+    },
+    "test14_prompt_injection_defense": {
+      "passed": true,
+      "result": {
+        "containsInjection": true,
+        "safeExecution": true
+      }
+    },
+    "test15_policy_permissions": {
+      "passed": true,
+      "result": {
+        "fsBlocked": true,
+        "processBlocked": true,
+        "sandboxed": true
+      }
+    },
+    "test16_handoff_protocol": {
+      "passed": true,
+      "result": {
+        "gateActive": true,
+        "gatePassed": true,
+        "downloadLink": "/version-a/download/august-report.csv"
+      }
+    },
+    "test17_persistence": {
+      "passed": true,
+      "sessions": [
+        "- id: lab-battery-zu",
+        "- id: lab-battery-xz",
+        "- id: testbattery-tm",
+        "- id: lab-test-battery-db",
+        "- id: lab-test-4k"
+      ]
+    },
+    "test18_19_repeated_stability": {
+      "workflowA_login": {
+        "total": 10,
+        "passed": 10,
+        "failed": 0,
+        "min": 1961,
+        "max": 3039,
+        "mean": 2203,
+        "stdDev": 406
+      },
+      "workflowB_search": {
+        "total": 10,
+        "passed": 10,
+        "failed": 0,
+        "min": 2006,
+        "max": 2087,
+        "mean": 2044,
+        "stdDev": 24
+      },
+      "workflowC_download": {
+        "total": 10,
+        "passed": 10,
+        "failed": 0,
+        "min": 846,
+        "max": 926,
+        "mean": 880,
+        "stdDev": 28
+      },
+      "totalRuns": 30,
+      "overallPassed": 30,
+      "overallSuccessRate": "100.0%"
+    },
+    "test20_cli_usability": {
+      "passed": true,
+      "hasAsciiBanner": false,
+      "hasCommands": true,
+      "hasMemoryRecords": true
+    }
+  },
+  "metrics": {
+    "total": 0,
+    "passed": 0,
+    "failed": 0,
+    "flaky": 0,
+    "durationsMs": {}
+  }
+}
