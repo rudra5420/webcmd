@@ -15,7 +15,7 @@ from uuid import UUID, uuid4
 
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect, Query
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -141,6 +141,20 @@ def create_app(config: WebCMDConfig | None = None, orchestrator: Orchestrator | 
         if index_file.exists():
             return HTMLResponse(content=index_file.read_text(encoding="utf-8"))
         return HTMLResponse("<h1>WebCMD Dashboard</h1><p>Static files missing.</p>")
+
+    @app.get("/style.css")
+    async def get_style():
+        f = STATIC_DIR / "style.css"
+        if f.exists():
+            return FileResponse(f, media_type="text/css")
+        raise HTTPException(status_code=404, detail="style.css not found")
+
+    @app.get("/app.js")
+    async def get_app():
+        f = STATIC_DIR / "app.js"
+        if f.exists():
+            return FileResponse(f, media_type="application/javascript")
+        raise HTTPException(status_code=404, detail="app.js not found")
 
     @app.get("/api/health")
     async def health():
