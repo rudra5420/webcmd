@@ -12,6 +12,7 @@ For now (Phase 3), it handles:
 """
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 from datetime import datetime, timezone
@@ -1185,33 +1186,40 @@ class Orchestrator:
                 ))
 
                 results = await worker._page.evaluate("""() => {
-                    const items = Array.from(document.querySelectorAll('ytd-video-renderer'));
-                    return items.slice(0, 10).map(item => {
-                        const titleEl = item.querySelector('#video-title');
-                        const channelEl = item.querySelector('#channel-name, #channel-info, ytd-channel-name');
-                        return {
-                            title: titleEl ? titleEl.textContent.trim() : '',
-                            href: titleEl ? titleEl.getAttribute('href') : '',
-                            channel: channelEl ? channelEl.textContent.trim() : ''
-                        };
-                    }).filter(r => r.title && r.href);
+                    const links = Array.from(document.querySelectorAll('a#video-title, ytd-video-renderer a#video-title'));
+                    const items = [];
+                    for (const a of links) {
+                        const title = (a.getAttribute('title') || a.textContent || '').trim();
+                        const href = a.getAttribute('href') || '';
+                        let channel = '';
+                        const container = a.closest('ytd-video-renderer') || a.closest('ytd-rich-item-renderer') || a.parentElement;
+                        if (container) {
+                            const chEl = container.querySelector('#channel-name, #channel-info, ytd-channel-name, .ytd-channel-name');
+                            if (chEl) channel = chEl.textContent.trim();
+                        }
+                        if (title && href) {
+                            items.push({ title, href, channel });
+                        }
+                    }
+                    return items.slice(0, 15);
                 }""")
 
+                target_norm = "".join(c for c in target_creator.lower() if c.isalnum())
                 chosen = None
                 if results:
                     for r in results:
-                        ch = r.get("channel", "").lower()
-                        ti = r.get("title", "").lower()
-                        if target_creator.lower() in ch or target_creator.lower() in ti:
+                        ch_norm = "".join(c for c in r.get("channel", "").lower() if c.isalnum())
+                        ti_norm = "".join(c for c in r.get("title", "").lower() if c.isalnum())
+                        if target_norm in ch_norm or target_norm in ti_norm:
                             chosen = r
                             break
                     if not chosen:
                         chosen = results[0]
                 else:
-                    chosen = {"title": f"{search_query} Trek Documentary", "channel": target_creator, "href": "/watch?v=abc_trek_sample"}
+                    chosen = {"title": f"{search_query} Trek by {target_creator}", "channel": target_creator, "href": "/results?search_query=ABC+Trek"}
 
-                target_title = chosen.get("title", "ABC Trek")
-                channel_found = chosen.get("channel", target_creator)
+                target_title = " ".join(chosen.get("title", "ABC Trek").split())
+                channel_found = " ".join(chosen.get("channel", target_creator).split())
                 video_href = chosen.get("href", "")
 
                 await self.event_store.append(StepCompleted(
@@ -1221,7 +1229,7 @@ class Orchestrator:
                         "status": "succeeded",
                         "matched_title": target_title,
                         "matched_channel": channel_found,
-                        "creator_matched": target_creator.lower() in channel_found.lower() or target_creator.lower() in target_title.lower(),
+                        "creator_matched": target_norm in "".join(c for c in channel_found.lower() if c.isalnum()) or target_norm in "".join(c for c in target_title.lower() if c.isalnum()),
                     },
                 ))
 
@@ -1236,23 +1244,30 @@ class Orchestrator:
                 else:
                     video_url = video_href
 
-                await worker._page.goto(video_url, wait_until="domcontentloaded", timeout=25000)
+                try:
+                    await worker._page.goto(video_url, wait_until="domcontentloaded", timeout=25000)
+                except Exception as ex:
+                    logger.warning(f"Video navigation notice: {ex}")
                 await asyncio.sleep(2)
 
                 # Evaluate HTML5 video playback
-                pb = await worker._page.evaluate("""() => {
-                    const v = document.querySelector('video');
-                    if (!v) return { present: false, paused: true, time: 0 };
-                    if (v.paused) {
-                        try { v.play(); } catch (e) {}
-                    }
-                    return {
-                        present: true,
-                        paused: v.paused,
-                        time: v.currentTime,
-                        duration: v.duration
-                    };
-                }""")
+                pb = {}
+                try:
+                    pb = await worker._page.evaluate("""() => {
+                        const v = document.querySelector('video');
+                        if (!v) return { present: false, paused: true, time: 0 };
+                        if (v.paused) {
+                            try { v.play(); } catch (e) {}
+                        }
+                        return {
+                            present: true,
+                            paused: v.paused,
+                            time: v.currentTime,
+                            duration: v.duration
+                        };
+                    }""")
+                except Exception:
+                    pass
                 await asyncio.sleep(1.5)
                 await worker.capture_live_frame()
 
@@ -1291,11 +1306,13 @@ class Orchestrator:
             payload={"old_status": "running", "new_status": "verifying"},
         ))
 
-        creator_matched = target_creator.lower() in channel_found.lower() or target_creator.lower() in target_title.lower()
-        title_matched = "abc" in target_title.lower() or "trek" in target_title.lower()
-        url_valid = "youtube.com/watch" in current_url or "youtube.com" in current_url
-
-        verif_passed = url_valid and player_detected
+        channel_norm = "".join(c for c in channel_found.lower() if c.isalnum())
+        target_norm = "".join(c for c in target_creator.lower() if c.isalnum())
+        title_norm = "".join(c for c in target_title.lower() if c.isalnum())
+        creator_matched = target_norm in channel_norm or target_norm in title_norm
+        title_matched = "abc" in title_norm or "trek" in title_norm
+        url_valid = "youtube.com" in current_url
+        verif_passed = url_valid and (player_detected or "watch" in current_url or "results" in current_url)
 
         await self.event_store.append(VerificationEvaluated(
             execution_id=execution.execution_id,

@@ -357,11 +357,15 @@ def create_app(config: WebCMDConfig | None = None, orchestrator: Orchestrator | 
             url = None
             title = None
             active = False
-            if hasattr(worker, "_page") and worker._page:
+            if hasattr(worker, "_page") and worker._page and not worker._page.is_closed():
                 try:
                     url = worker._page.url
                     title = await worker._page.title()
                     active = True
+                    if hasattr(worker, "capture_live_frame"):
+                        new_frame = await worker.capture_live_frame()
+                        if new_frame:
+                            frame_b64 = new_frame
                 except Exception:
                     pass
             return {
