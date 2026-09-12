@@ -163,7 +163,32 @@ def create_app(config: WebCMDConfig | None = None, orchestrator: Orchestrator | 
         orch: Orchestrator = app.state.orchestrator
         pid = UUID(project_id) if project_id else None
         executions = await orch.list_executions(pid)
-        return [serialize_model(e) for e in executions]
+        
+        task_map = {}
+        try:
+            async with orch.db.get_connection() as conn:
+                cursor = await conn.execute(
+                    "SELECT execution_id, payload FROM domain_events WHERE event_type = 'ExecutionCreated'"
+                )
+                rows = await cursor.fetchall()
+                for eid_str, payload_str in rows:
+                    try:
+                        p = json.loads(payload_str)
+                        task_map[eid_str] = p.get("intent") or p.get("task")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+        results = []
+        for e in executions:
+            d = serialize_model(e)
+            d["execution_id"] = str(e.id)
+            d["task_text"] = (
+                (e.metadata.get("task") or e.metadata.get("intent")) if e.metadata else None
+            ) or task_map.get(str(e.id)) or f"Task {str(e.id)[:8]}"
+            results.append(d)
+        return results
 
     @app.get("/api/executions/{execution_id}")
     async def get_execution(execution_id: str):
@@ -181,9 +206,22 @@ def create_app(config: WebCMDConfig | None = None, orchestrator: Orchestrator | 
         events = await orch.event_store.get_events(eid)
         checkpoints = await orch.checkpoint_mgr.get_all(eid)
 
+        task_text = ex.metadata.get("task") or ex.metadata.get("intent") if ex.metadata else None
+        if not task_text:
+            for ev in events:
+                if ev.event_type == "ExecutionCreated" and ev.payload.get("intent"):
+                    task_text = ev.payload.get("intent")
+                    break
+
+        ex_dict = serialize_model(ex)
+        ex_dict["execution_id"] = str(ex.id)
+        ex_dict["task_text"] = task_text
+
         return {
-            "execution": serialize_model(ex),
+            "execution": ex_dict,
+            "task_text": task_text,
             "event_count": len(events),
+            "events": [serialize_model(ev) for ev in events],
             "checkpoints": [serialize_model(cp) for cp in checkpoints],
             "human_verification": serialize_model(ex.human_verification) if ex.human_verification else None,
         }

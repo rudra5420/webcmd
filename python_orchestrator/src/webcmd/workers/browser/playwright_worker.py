@@ -115,15 +115,29 @@ class PlaywrightWorker(BaseWorker):
         if not url:
             raise PermanentError("URL is required for browser.navigate")
         
-        await self._page.goto(url)
-        await self._page.wait_for_load_state("networkidle")
+        await self._page.goto(url, wait_until="domcontentloaded", timeout=25000)
+        try:
+            await self._page.wait_for_load_state("load", timeout=5000)
+        except Exception:
+            pass
         
+        title = ""
+        try:
+            title = await self._page.title()
+        except Exception:
+            pass
+
         obs = ObservationRecord(
             observation_type="browser_url",
-            data={"url": self._page.url},
+            data={"url": self._page.url, "title": title},
             trust_class=TrustLevel.T4_TOOL_OUTPUT
         )
-        return WorkerResult(status="succeeded", outputs={}, observations=[obs], side_effect_status=SideEffectStatus.APPLIED)
+        return WorkerResult(
+            status="succeeded",
+            outputs={"url": self._page.url, "title": title, "status": "navigated"},
+            observations=[obs],
+            side_effect_status=SideEffectStatus.APPLIED
+        )
 
     async def _resolve_locator(self, locator_data: Dict[str, Any]) -> tuple[Any, str]:
         """

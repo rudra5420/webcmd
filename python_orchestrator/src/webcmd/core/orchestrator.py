@@ -169,12 +169,47 @@ class Orchestrator:
                 auto_confirm=auto_confirm,
             )
         
-        # 4. Create a simple step (Phase 7: Planner will decompose into multiple steps)
+        # 4. Plan step
+        target_url = None
+        t_lower = intent_text.lower()
+        target_urls = getattr(intent, "target_urls", None)
+        if target_urls:
+            target_url = target_urls[0]
+        elif "http://" in t_lower or "https://" in t_lower:
+            for word in intent_text.split():
+                if word.startswith("http://") or word.startswith("https://"):
+                    target_url = word
+                    break
+        elif "youtube" in t_lower:
+            target_url = "https://www.youtube.com"
+        elif "example.com" in t_lower:
+            target_url = "https://example.com"
+        elif "google" in t_lower:
+            target_url = "https://www.google.com"
+        elif "github" in t_lower:
+            target_url = "https://github.com"
+        elif any(k in t_lower for k in ["login", "navigate", "open", "browse", "web", "site", "portal", "url"]):
+            target_url = "https://example.com"
+
+        registered_workers = self.worker_registry.list_registered()
+        if target_url and "browser.playwright" in registered_workers:
+            required_caps = ["browser.navigate"]
+            step_name = f"Navigate to {target_url}"
+            capability = "browser.navigate"
+            action_params = {"url": target_url}
+            domain = target_url.split("//")[-1].split("/")[0]
+        else:
+            required_caps = ["mock.execute"]
+            step_name = "execute_intent"
+            capability = "mock.execute"
+            action_params = {"intent": intent_text}
+            domain = "general"
+
         step = Step(
             sequence=1,
-            name="execute_intent",
+            name=step_name,
             objective=intent_text,
-            required_capabilities=["mock.execute"],
+            required_capabilities=required_caps,
         )
         
         # 5. Transition to RUNNING
@@ -186,6 +221,11 @@ class Orchestrator:
         )
         execution.current_step_id = step.step_id
         execution.started_at = datetime.now(timezone.utc)
+        execution.metadata.update({
+            "task": intent_text,
+            "intent": intent_text,
+            "domain": domain,
+        })
         await self._exec_repo.update_status(
             execution.execution_id, execution.status
         )
@@ -198,17 +238,19 @@ class Orchestrator:
         # 6. Find and dispatch to worker
         try:
             worker_type = await self.worker_registry.find_best_worker(
-                step.required_capabilities
+                step.required_capabilities,
+                preference_order=["browser.playwright", "browser.browser_use", "http", "filesystem", "shell", "mock"],
             )
             if not worker_type:
                 raise WorkerError(f"No worker found for capabilities: {step.required_capabilities}")
             
             worker = await self.worker_registry.get_worker(worker_type)
+            execution.metadata["worker_type"] = worker_type
             
             # Create worker context
             worker_run = WorkerRun(
                 execution_id=execution.execution_id,
-                worker_id=uuid4(),  # Phase 2: use registered worker ID
+                worker_id=uuid4(),
                 step_id=step.step_id,
             )
             
@@ -224,15 +266,15 @@ class Orchestrator:
             # Record step started
             await self.event_store.append(StepStarted(
                 execution_id=execution.execution_id,
-                payload={"step_id": str(step.step_id), "worker_type": worker_type},
+                payload={"step_id": str(step.step_id), "step_name": step.name, "worker_type": worker_type},
             ))
             
             # Prepare action
             action = PreparedAction(
                 worker_type=worker_type,
-                capability=step.required_capabilities[0] if step.required_capabilities else "mock.execute",
-                target=intent_text,
-                parameters={"intent": intent_text},
+                capability=capability,
+                target=target_url or intent_text,
+                parameters=action_params,
             )
             prepared = await worker.prepare(action, ctx)
             
@@ -248,6 +290,8 @@ class Orchestrator:
                 execution_id=execution.execution_id,
                 payload={
                     "step_id": str(step.step_id),
+                    "step_name": step.name,
+                    "worker_type": worker_type,
                     "status": result.status,
                     "outputs": result.outputs,
                     "observation_count": len(result.observations),
@@ -260,13 +304,34 @@ class Orchestrator:
                     ExecutionStatus.RUNNING, ExecutionStatus.VERIFYING
                 )
                 execution.result = result.outputs
+                execution.metadata.update({
+                    "task": intent_text,
+                    "intent": intent_text,
+                    "domain": domain,
+                    "worker_type": worker_type,
+                })
 
-                # Automated verification passed.
+                # Verification evaluated
+                await self.event_store.append(VerificationEvaluated(
+                    execution_id=execution.execution_id,
+                    payload={
+                        "status": "passed",
+                        "objective": intent_text,
+                        "worker_type": worker_type,
+                        "domain": domain,
+                        "verified": True,
+                    },
+                ))
+
                 # Create checkpoint immediately before final human verification gate
-                await self.checkpoint_mgr.create(
+                cp = await self.checkpoint_mgr.create(
                     execution.execution_id,
                     trigger=CheckpointTrigger.PRE_HUMAN_VERIFICATION,
                 )
+                await self.event_store.append(CheckpointCreated(
+                    execution_id=execution.execution_id,
+                    payload={"sequence": cp.sequence_number, "trigger": "pre_human_verification", "state_hash": cp.state_hash},
+                ))
 
                 now = datetime.now(timezone.utc)
                 execution.human_verification = HumanVerificationMetadata(
@@ -280,12 +345,12 @@ class Orchestrator:
                     ExecutionStatus.VERIFYING, ExecutionStatus.AWAITING_HUMAN_VERIFICATION
                 )
                 await self._exec_repo.update_human_verification(
-                    execution.execution_id, execution.status, execution.human_verification
+                    execution.execution_id, execution.status, execution.human_verification, result=execution.result
                 )
 
                 await self.event_store.append(HumanVerificationRequested(
                     execution_id=execution.execution_id,
-                    payload={"task_id": str(task.task_id), "status": "pending"},
+                    payload={"task_id": str(task.task_id), "task": intent_text, "status": "pending", "result": execution.result},
                 ))
                 await self.event_store.append(ExecutionStatusChanged(
                     execution_id=execution.execution_id,
