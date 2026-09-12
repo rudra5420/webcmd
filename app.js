@@ -1040,13 +1040,17 @@ async function checkHealthAndSync() {
     const res = await fetch(getApiUrl("/api/health"), { signal: controller.signal });
     clearTimeout(timeoutId);
 
-    if (res.ok) {
-      isCloudDemoMode = false;
-      wsDot.className = "status-dot connected";
-      wsStatusText.textContent = "Live Agent";
-      wsStatusText.title = "Connected to live WebCMD Orchestrator";
-      await syncAll();
-      return;
+    const contentType = res.headers.get("content-type") || "";
+    if (res.ok && contentType.includes("application/json")) {
+      const data = await res.json();
+      if (data && data.status === "ok") {
+        isCloudDemoMode = false;
+        wsDot.className = "status-dot connected";
+        wsStatusText.textContent = "Live Agent";
+        wsStatusText.title = "Connected to live WebCMD Orchestrator";
+        await syncAll();
+        return;
+      }
     }
   } catch (e) {
     // Fall through to Cloud Demo Mode
