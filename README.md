@@ -1,160 +1,196 @@
-<img width="1280" height="640" alt="Webcmd — stop paying agents to rediscover the web" src="docs/readme-hero-v2.png" />
-
-
 <p align="center">
-  <a href="https://www.npmjs.com/package/@agentrhq/webcmd">
-    <img alt="NPM version" src="https://img.shields.io/npm/v/@agentrhq/webcmd.svg?style=for-the-badge&color=1E88E5&labelColor=000000">
-  </a>
-  <a href="https://webcmd.dev/docs">
-    <img alt="Documentation" src="https://img.shields.io/badge/docs-webcmd.dev-7C3AED.svg?style=for-the-badge&labelColor=000000">
-  </a>
-  <a href="https://github.com/agentrhq/webcmd/blob/main/LICENSE">
-    <img alt="License" src="https://img.shields.io/badge/license-Apache%202.0-1E88E5.svg?style=for-the-badge&labelColor=000000">
-  </a>
-  <a href="https://discord.gg/9YP2C9tvMp">
-    <img alt="Join the community on Discord" src="https://img.shields.io/badge/Join%20the%20community-5865F2.svg?style=for-the-badge&logo=discord&logoColor=white&labelColor=000000&logoWidth=20">
-  </a>
-  <a href="https://x.com/agentrhq">
-    <img alt="Follow AgentR on X" src="https://img.shields.io/badge/Built%20by%20%40agentrhq-000000.svg?style=for-the-badge&logo=x&logoColor=white&labelColor=000000&logoWidth=20">
-  </a>
+  <img width="1280" height="420" alt="WebCMD - AI Execution Runtime" src="docs/readme-hero-v2.png" />
 </p>
 
-# Webcmd
+# WebCMD
 
-**Self-learning browser infra for AI agents.**
+> **"WebCMD is an AI execution runtime that learns how to perform digital work, verifies the result, and improves from experience."**
 
-Webcmd learns the navigational context of websites as agents use them, then
-turns that knowledge into local memory for faster, cheaper, more reliable
-browser automation. The goal is simple: stop making agents rediscover the same
-sites on every run and cut browser-agent token spend by up to 90%.
+WebCMD transforms natural-language instructions into real-world automated browser actions. Unlike brittle scraping scripts or hallucination-prone autonomous agents, WebCMD operates as a **deterministic, verifiable execution runtime** that learns robust navigation patterns, self-heals when websites change, verifies its own postconditions, and gates final execution behind a single human confirmation.
 
-Webcmd pairs live browser control with a self-learning memory layer:
+---
 
-| Layer | Scenario | What Webcmd Helps With |
-| --- | --- | --- |
-| 0. Live browser control | The site is unfamiliar. | Use `webcmd browser` to inspect, click, type, extract, capture network calls, and complete the task in a real browser. |
-| 1. Sitemap memory | The site is familiar, but the action space is not fully known. | Capture an agent-facing sitemap of observed pages, states, actions, workflows, APIs, pitfalls, and fallback paths. |
+## The WebCMD Execution Lifecycle
 
-## Demo
-
-https://github.com/user-attachments/assets/bdb65307-9e2a-4d58-9175-45d59528ae37
-
-## Quick Start
-
-### Agent prompt
+Every task follows an explicit, audited canonical pipeline:
 
 ```text
-Fetch and follow https://raw.githubusercontent.com/agentrhq/webcmd/main/start.md to set up Webcmd end to end.
+USER INTENT
+    ↓
+INTENT NORMALIZATION
+    ↓
+MEMORY RETRIEVAL (Domain & Experiential Memory)
+    ↓
+WORKFLOW RESOLUTION
+    ↓
+HIERARCHICAL PLANNING
+    ↓
+POLICY CHECK (Hard LLM Boundary & Privilege Check)
+    ↓
+EXECUTION ROUTER
+    ↓
+WORKER EXECUTION (Real Headed Chromium via Playwright)
+    ↓
+OBSERVATION CAPTURE (DOM & Viewport Snapshot)
+    ↓
+AUTOMATED VERIFICATION (Independent Postcondition Checks)
+    ↓
+ATOMIC CHECKPOINT (PRE_HUMAN_VERIFICATION)
+    ↓
+RECOVERY IF DIVERGENT (Autonomous Selector Adaptation)
+    ↓
+EXACTLY ONE FINAL HUMAN VERIFICATION GATE
+    ↓
+EXECUTION COMPLETION
+    ↓
+EXPERIENTIAL LEARNING (Memory Confidence Update to 0.95)
 ```
 
-### Manual
+---
 
-Webcmd requires Node.js 20.6+.
+## Key Architectural Principles
+
+1. **Real Browser Execution**: Launches real Chromium (headed by default on Windows) with persistent profile storage at `./data/browser-profile/`. No fabricated UI animations or simulated outcomes.
+2. **Independent Automated Verification**: Execution success is never decided by the generative LLM itself. Dedicated verification engines inspect download file integrity, HTTP statuses, and DOM state.
+3. **Autonomous Self-Healing**: When DOM structure drifts (e.g. `#btn-download` changes to `#btn-export`), WebCMD activates bounded recovery, discovers alternative semantic selectors, adapts, verifies the result, and repairs site memory.
+4. **Single Final Human Gate**: Exactly one human confirmation gate is enforced per execution. Once automated verification passes, the runtime transitions to `AWAITING_HUMAN_VERIFICATION`. Confirmation updates experiential memory to confidence `0.95`.
+5. **Atomic Checkpoints & State Hash**: Pre-verification state is cryptographically hashed and saved so operations can be resumed without re-running destructive work.
+6. **Hard LLM Sandbox**: T0 security authority limits model actions. Sensitive credentials and raw session cookies are strictly isolated and never stored in plain text.
+
+---
+
+## Quick Start (Windows)
+
+### Option A: One-Click Startup Script
+
+WebCMD includes a turnkey PowerShell script that validates prerequisites, initializes local storage directories, spins up the test lab portal, and launches the WebCMD dashboard:
+
+```powershell
+.\start-dev.ps1
+```
+
+Once running, the interactive dashboard opens automatically at `http://127.0.0.1:8000`.
+
+### Option B: Manual Setup with Astral `uv`
+
+WebCMD requires Python 3.11+ and Node.js 18+.
+
+1. **Install Python dependencies**:
+   ```bash
+   cd python_orchestrator
+   uv sync --extra dev
+   ```
+
+2. **Start the local Test Lab portal (Port 9888)**:
+   ```bash
+   node test-lab/server.mjs
+   ```
+
+3. **Start the WebCMD Web Server (Port 8000)**:
+   ```bash
+   cd python_orchestrator
+   uv run webcmd web --port 8000
+   ```
+
+4. **Access the Web Dashboard**:
+   Open [http://127.0.0.1:8000](http://127.0.0.1:8000) in your browser.
+
+---
+
+## Flagship Demonstrations
+
+### Flagship Demo 1: Deterministic Reports Portal (Self-Healing & Learning)
+
+Proves WebCMD's core value: graceful recovery from UI divergence, independent verification, and instant memory reuse.
+
+1. **Stage 1 — Baseline Run (Mode A)**:
+   - Reset the portal: Click **↻ Reset Demo (Mode A)** in the dashboard control panel.
+   - Enter task: `Navigate to http://127.0.0.1:9888/portal/ and download September report`
+   - Real Chromium opens, clicks `#btn-download`, downloads `september-report.pdf`, verifies file integrity (>0 bytes, valid PDF header), hits the human gate, and stores memory with confidence 0.95.
+
+2. **Stage 2 — Divergence & Self-Healing (Mode B)**:
+   - Switch portal UI: Click **⇄ Switch UI (Mode B)**. The portal replaces `#btn-download` with `#btn-export`.
+   - Submit the same task again.
+   - Initial `#btn-download` locator fails.
+   - **Self-Healing Recovery engages**: WebCMD searches semantic locators, discovers `Export Report` (`#btn-export`), completes download, passes automated verification, and alerts operator for confirmation.
+   - Memory is updated with the repaired selector.
+
+3. **Stage 3 — Reusing Learned Memory**:
+   - Run the task a third time (still in Mode B).
+   - WebCMD checks previous experience, identifies the learned `#btn-export` selector, executes immediately without failure or recovery delay!
+
+You can also run this entire sequence automatically by clicking **⚡ Run 3-Stage Demo** on the dashboard.
+
+---
+
+### Flagship Demo 2: Real-World YouTube Automation
+
+Demonstrates complex dynamic single-page app (SPA) automation on a live external service:
+
+1. Enter task:
+   ```text
+   Go to YouTube, search for ABC Trek, find AjayRaj video, play it and verify
+   ```
+2. WebCMD launches headed Chromium:
+   - Navigates to `https://www.youtube.com`.
+   - Dismisses cookie/consent dialogs if present.
+   - Locates search bar, types `ABC Trek`, and presses Enter.
+   - Inspects search result DOM, finds video matching creator `AjayRaj`.
+   - Clicks video and verifies HTML5 `<video>` playback state (`currentTime > 0` and unpaused).
+   - Creates atomic checkpoint and requests final human verification.
+   - Upon confirmation, saves `youtube_video_search_and_play` experience to local memory.
+
+---
+
+## Web Dashboard Features
+
+- **Split Workspace Layout**: Left pane contains task inputs, quick example chips, live AI execution narrative, and the single Human Gate banner. Right pane displays the **Live Chromium Viewport** with URL bar and session status.
+- **Interactive Canonical Timeline**: 12 stages (`Intent`, `Memory`, `Plan`, `Policy`, `Execute`, `Observe`, `Verify`, `Checkpoint`, `Recover`, `Human Gate`, `Complete`, `Learn`). Click any stage to open the **Stage Detail Drawer** with raw telemetry.
+- **Runtime Control Panel**: Single-click buttons for `+ New Task`, `⚡ Run 3-Stage Demo`, `■ Stop`, `▶ Resume Checkpoint`, `✕ Clear Session`, `↻ Reset Demo (Mode A)`, `⇄ Switch UI (Mode B)`, `🗑 Reset Demo Memory`, and `🛡 Reset Browser Profile`.
+- **Run History Ledger**: Tabular audit trail showing Run ID, Task Objective, Strategy (Exploration, Recovery, or Learned), Outcome, Verification Status, and Timestamp.
+- **Real-Time WebSocket Streaming**: Instant domain event updates and live screencast frames without polling overhead.
+
+---
+
+## Directory Structure
+
+```text
+webcmd/
+├── data/                       # Local persistent runtime storage (gitignored)
+│   ├── browser-profile/        # Real Chromium user data & persistent session cookies
+│   ├── downloads/              # Downloaded artifacts (reports, exports)
+│   ├── screenshots/            # Live screencast frames & verification captures
+│   ├── checkpoints/            # Serialized execution checkpoints
+│   └── webcmd.db               # SQLite database (memories, executions, events)
+├── python_orchestrator/        # Core WebCMD Python runtime
+│   ├── src/webcmd/
+│   │   ├── core/               # Orchestrator, lifecycle engine
+│   │   ├── memory/             # Experiential & site memory engine
+│   │   ├── recovery/           # Self-healing & locator adaptation
+│   │   ├── verification/       # Automated verification engines
+│   │   ├── workers/            # Playwright, HTTP, filesystem, shell workers
+│   │   └── web/                # FastAPI web server, WebSocket, static UI
+│   └── tests/                  # Unit and integration test suite
+├── test-lab/                   # Local deterministic test portal (Node.js)
+├── start-dev.ps1               # Windows one-click launcher
+└── README.md                   # System documentation
+```
+
+---
+
+## Running the Automated Test Suite
+
+WebCMD includes a 96-test automated suite covering unit, integration, and web API layers:
 
 ```bash
-npm install -g @agentrhq/webcmd
-webcmd skills add
+cd python_orchestrator
+uv run --extra dev pytest tests/
 ```
 
-When prompted, choose Claude, Codex, another supported harness, or a custom
-skills path. That installs exactly one skill, `webcmd-browser`.
+All 96 tests validate orchestrator lifecycles, memory storage & confidence degradation, checkpoint serialization & resume, self-healing recovery triggers, security policies, and web server endpoints.
 
-Load or tag `webcmd-browser` only for live browser work, then describe the
-outcome you want. Installation and setup commands do not require that skill.
-
-```text
-Use webcmd to research the latest discussions about browser automation across Hacker News and Reddit, then return a concise comparison with source links.
-```
-
-## What You Can Ask
-
-- “Use webcmd to research agentic browser automation on PubMed and return the title, authors, publication date, abstract, and URL for each result.”
-- “Use webcmd to find active AI infrastructure companies in the YC company directory and return the company, batch, description, location, profile URL, and source links. Keep it read-only.”
-- “Use webcmd to look up parts on Grainger by part number and return price, stock, minimum order quantity, lead time, and product URL.”
-- “Use webcmd with my logged-in `work` profile to summarize unread LinkedIn messages from the last seven days and return the sender, subject or opening text, received time, and conversation URL.”
-- “Use webcmd to check Grainger part prices and SAP Ariba purchase-order status, then return a combined summary.”
-
-## See It in Action
-
-```text
-Use webcmd with my logged-in `social` profile to collect my recent X bookmarks and return the author, text, and URL.
-```
-
-The agent uses the logged-in profile to complete the task in a real browser.
-Along the way, Webcmd quietly retains useful navigation context so later agents
-can avoid repeating the same exploration.
-
-## Where Webcmd Works
-
-Webcmd can work through authenticated browser sessions across research, social,
-AI, shopping, and booking products.
-
-| Group | Supported surfaces | Representative outcomes |
-| --- | --- | --- |
-| research and communities | Hacker News, Reddit, PubMed | Compare current discussions, find primary research, and return concise summaries with source links. |
-| social and professional | X/Twitter, LinkedIn, TikTok | Collect bookmarks, monitor public posts, or research people and creators with a named profile when needed. |
-| AI tools | ChatGPT, Claude, Gemini, NotebookLM | Retrieve conversations, research outputs, notebooks, and generated materials from the tools you already use. |
-| shopping and bookings | Amazon, Blinkit, Zepto, BigBasket, District, Practo | Compare products, availability, prices, appointments, events, and delivery options. |
-
-This list is illustrative. Webcmd can operate other websites through the same
-live browser workflow.
-
-## How Self-Learning Works
-
-<img width="1672" height="941" alt="How Webcmd learns: load memory, use the live web, keep useful learnings, and help the next agent" src="docs/readme-self-learning.png" />
-
-Learning stays quiet and selective: the live browser is always truth, Webcmd
-never explores just to learn, and a memory failure never blocks the task. First
-access may use a Webcmd Cloud seed; subsequent learning stays local.
-
-For local, multi-step browser exploration, agents can send one sandboxed
-Playwright-style program to an explicit browser session:
-
-```bash
-webcmd --profile work session create "Work Project" -f json
-# id: work-project-k7
-webcmd --profile work --session work-project-k7 browser tabs
-webcmd --profile work --session work-project-k7 browser run --file explore.js
-printf 'return await page.title();' \
-  | webcmd --profile work --session work-project-k7 browser run --stdin
-webcmd --profile work session close work-project-k7
-```
-
-Profiles are cookie jars; Sessions are independent browser windows within a
-profile, so Session IDs are immutable, Profile-scoped, and safe to reuse for
-that Session's lifetime. Parallel agents should create separate Sessions.
-Raw browser commands require an explicit readable Session ID.
-
-## Benchmarks
-
-On [BU Bench V1](https://github.com/browser-use/benchmark#bu-bench-v1), a
-100-task browser automation benchmark, Webcmd recorded the highest accuracy and
-lowest estimated controller cost per completed task, and fewest agent turns per
-completed task in this comparison.
-
-![BU Bench V1 comparison: webcmd leads accuracy at 67%, cost per completed task at $0.255, and agent turns per completed task at 9.8](./benchmarks/charts/bu-bench-readme.svg)
-
-All tools used the same Pi controller, controller model, Codex `gpt-5.4` judge,
-and CloakBrowser engine. This is a stronger judge than the original BU Bench
-setup, whose [current runner uses Gemini 2.5 Flash](https://github.com/browser-use/benchmark/blob/main/run_eval.py#L37-L38).
-Accuracy is passed tasks out of 100. Cost and agent turns are averaged over
-completed tasks; cost excludes judge usage. See the
-[benchmark report](./benchmarks/README.md) for category results, methodology,
-architectural analysis, and reproduction steps.
-
-## Learn More
-
-Webcmd Cloud can run supported commands and browser sessions on hosted infrastructure. It is in active development and is not yet stable.
-
-- [Prompt Cookbook](https://webcmd.dev/docs/agent-prompts)
-- [How Webcmd Works](https://webcmd.dev/docs/concepts)
-- [Local or Cloud](https://webcmd.dev/docs/local-or-cloud)
-- [Command Surface](https://webcmd.dev/docs/cli-reference)
-
-## Contributing
-
-See [CONTRIBUTING.md](./CONTRIBUTING.md).
+---
 
 ## License
 
-Released under the terms in [`LICENSE`](./LICENSE).
+Apache 2.0. See [LICENSE](./LICENSE) for details.

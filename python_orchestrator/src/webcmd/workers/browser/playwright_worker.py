@@ -1,4 +1,5 @@
 import asyncio
+import base64
 import json
 import logging
 import uuid
@@ -7,6 +8,7 @@ from pathlib import Path
 
 from playwright.async_api import async_playwright, Page, Browser, Playwright, BrowserContext, TimeoutError as PlaywrightTimeoutError
 
+from webcmd.config import get_config
 from webcmd.workers.base import (
     BaseWorker,
     WorkerError,
@@ -34,16 +36,20 @@ logger = logging.getLogger(__name__)
 
 class PlaywrightWorker(BaseWorker):
     """
-    Playwright worker for browser automation.
-    Implements capabilities like navigation, clicking, typing, etc.
+    Playwright worker for real browser automation.
+    Supports persistent profile sessions, live screenshot broadcasting,
+    headed visible execution, and structured state observation.
     """
     
-    def __init__(self, headless: bool = True):
-        self.headless = headless
+    def __init__(self, headless: Optional[bool] = None, profile_dir: Optional[Path] = None):
+        cfg = get_config()
+        self.headless = cfg.browser_headless if headless is None else headless
+        self.profile_dir = profile_dir or cfg.get_browser_profile_dir()
         self._playwright: Optional[Playwright] = None
         self._browser: Optional[Browser] = None
         self._context: Optional[BrowserContext] = None
         self._page: Optional[Page] = None
+        self.latest_screenshot_b64: Optional[str] = None
 
     @property
     def worker_type(self) -> str:
@@ -54,14 +60,57 @@ class PlaywrightWorker(BaseWorker):
         return "Playwright Browser Worker"
         
     async def initialize(self, context: WorkerContext) -> None:
-        """Initialize the browser instance lazily."""
+        """Initialize the browser instance lazily with persistent profile if available."""
         try:
+            if self._context and self._page:
+                return
+
             self._playwright = await async_playwright().start()
+            
+            # Use persistent browser context so user logins and cookies persist across runs
+            if self.profile_dir:
+                try:
+                    self.profile_dir.mkdir(parents=True, exist_ok=True)
+                    self._context = await self._playwright.chromium.launch_persistent_context(
+                        user_data_dir=str(self.profile_dir),
+                        headless=self.headless,
+                        viewport={"width": 1280, "height": 800},
+                        accept_downloads=True,
+                    )
+                    self._page = self._context.pages[0] if self._context.pages else await self._context.new_page()
+                    logger.info(f"Initialized persistent Chromium context at {self.profile_dir} (headless={self.headless})")
+                    return
+                except Exception as pe:
+                    logger.warning(f"Persistent context failed (may be in use), falling back to standard context: {pe}")
+
+            # Fallback to standard launch
             self._browser = await self._playwright.chromium.launch(headless=self.headless)
-            self._context = await self._browser.new_context()
+            self._context = await self._browser.new_context(
+                viewport={"width": 1280, "height": 800},
+                accept_downloads=True,
+            )
             self._page = await self._context.new_page()
+            logger.info(f"Initialized standard Chromium context (headless={self.headless})")
         except Exception as e:
             raise WorkerError(f"Failed to initialize Playwright: {e}") from e
+
+    async def capture_live_frame(self) -> Optional[str]:
+        """Capture current viewport as base64 JPEG and write to ./data/screenshots/latest.jpg."""
+        if not self._page:
+            return self.latest_screenshot_b64
+        try:
+            data = await self._page.screenshot(type="jpeg", quality=65)
+            b64 = base64.b64encode(data).decode("utf-8")
+            self.latest_screenshot_b64 = b64
+            
+            cfg = get_config()
+            s_dir = cfg.get_screenshots_dir()
+            s_dir.mkdir(parents=True, exist_ok=True)
+            (s_dir / "latest.jpg").write_bytes(data)
+            return b64
+        except Exception as e:
+            logger.debug(f"Viewport frame capture skipped: {e}")
+            return self.latest_screenshot_b64
 
     async def capabilities(self) -> CapabilitySet:
         """Return the supported capabilities."""
@@ -74,6 +123,7 @@ class PlaywrightWorker(BaseWorker):
             Capability(name="browser.dom_inspect", description="", idempotency=IdempotencyType.IDEMPOTENT, risk_level=RiskLevel.LOW),
             Capability(name="browser.scroll", description="", idempotency=IdempotencyType.IDEMPOTENT, risk_level=RiskLevel.LOW),
             Capability(name="browser.wait", description="", idempotency=IdempotencyType.IDEMPOTENT, risk_level=RiskLevel.LOW),
+            Capability(name="browser.press", description="", idempotency=IdempotencyType.NON_IDEMPOTENT, risk_level=RiskLevel.LOW),
         ]
         return CapabilitySet(capabilities=caps)
 
@@ -93,6 +143,8 @@ class PlaywrightWorker(BaseWorker):
                 return await self._execute_click(action)
             elif action.capability == "browser.type":
                 return await self._execute_type(action)
+            elif action.capability == "browser.press":
+                return await self._execute_press(action)
             elif action.capability == "browser.screenshot":
                 return await self._execute_screenshot(action)
             elif action.capability == "browser.download":
@@ -177,6 +229,8 @@ class PlaywrightWorker(BaseWorker):
         locator, strategy = await self._resolve_locator(locator_data)
         
         await locator.first.click()
+        await asyncio.sleep(0.3)
+        await self.capture_live_frame()
         
         obs = ObservationRecord(
             observation_type="browser_click",
@@ -191,6 +245,8 @@ class PlaywrightWorker(BaseWorker):
         locator, strategy = await self._resolve_locator(locator_data)
         
         await locator.first.fill(text)
+        await asyncio.sleep(0.2)
+        await self.capture_live_frame()
         
         obs = ObservationRecord(
             observation_type="browser_type",
@@ -198,6 +254,20 @@ class PlaywrightWorker(BaseWorker):
             trust_class=TrustLevel.T4_TOOL_OUTPUT
         )
         return WorkerResult(status="succeeded", outputs={}, observations=[obs], side_effect_status=SideEffectStatus.APPLIED)
+
+    async def _execute_press(self, action: PreparedAction) -> WorkerResult:
+        key = action.parameters.get("key", "Enter")
+        if self._page:
+            await self._page.keyboard.press(key)
+            await asyncio.sleep(0.5)
+            await self.capture_live_frame()
+            
+        obs = ObservationRecord(
+            observation_type="browser_key",
+            data={"key": key},
+            trust_class=TrustLevel.T4_TOOL_OUTPUT
+        )
+        return WorkerResult(status="succeeded", outputs={"key": key}, observations=[obs], side_effect_status=SideEffectStatus.APPLIED)
         
     async def _execute_screenshot(self, action: PreparedAction) -> WorkerResult:
         path = action.parameters.get("path", "screenshot.png")
@@ -319,7 +389,22 @@ class PlaywrightWorker(BaseWorker):
 
     async def shutdown(self) -> None:
         """Shutdown playwright and browser."""
+        if self._context:
+            try:
+                await self._context.close()
+            except Exception:
+                pass
+            self._context = None
+            self._page = None
         if self._browser:
-            await self._browser.close()
+            try:
+                await self._browser.close()
+            except Exception:
+                pass
+            self._browser = None
         if self._playwright:
-            await self._playwright.stop()
+            try:
+                await self._playwright.stop()
+            except Exception:
+                pass
+            self._playwright = None

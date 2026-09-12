@@ -59,3 +59,7 @@ python_orchestrator/.venv/
 python_orchestrator/**/__pycache__/
 python_orchestrator/.pytest_cache/
 python_orchestrator/downloads/
+data/
+python_orchestrator/data/
+.env
+*.env

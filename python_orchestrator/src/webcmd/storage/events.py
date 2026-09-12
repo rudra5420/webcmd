@@ -64,6 +64,9 @@ class WorkflowCompiled(DomainEvent):
 class MemoryUpdated(DomainEvent):
     event_type: str = "MemoryUpdated"
 
+class PlanCreated(DomainEvent):
+    event_type: str = "PlanCreated"
+
 class EventStore:
     """Event store interface to be implemented by a repository or manager."""
     def __init__(self, db_manager):

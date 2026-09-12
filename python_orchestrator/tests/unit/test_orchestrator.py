@@ -62,3 +62,8 @@ class TestOrchestrator:
         await orchestrator.execute_task("task 2")
         executions = await orchestrator.list_executions()
         assert len(executions) >= 2
+
+    async def test_youtube_task_detection(self, orchestrator):
+        assert orchestrator._is_youtube_task("Open YouTube and search for ABC Trek") is True
+        assert orchestrator._is_youtube_task("Go to youtube.com and watch AjayRaj") is True
+        assert orchestrator._is_youtube_task("Download monthly financial report") is False

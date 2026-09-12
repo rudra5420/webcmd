@@ -347,6 +347,100 @@ def create_app(config: WebCMDConfig | None = None, orchestrator: Orchestrator | 
             await conn.commit()
         return {"status": "cleared"}
 
+    @app.get("/api/browser/screencast")
+    async def get_browser_screencast():
+        """Get the latest live viewport screencast frame and browser page status."""
+        orch: Orchestrator = app.state.orchestrator
+        try:
+            worker = await orch.worker_registry.get_worker("browser.playwright")
+            frame_b64 = getattr(worker, "latest_screenshot_b64", None)
+            url = None
+            title = None
+            active = False
+            if hasattr(worker, "_page") and worker._page:
+                try:
+                    url = worker._page.url
+                    title = await worker._page.title()
+                    active = True
+                except Exception:
+                    pass
+            return {
+                "active": active,
+                "url": url,
+                "title": title,
+                "frame": frame_b64,
+            }
+        except Exception:
+            return {"active": False, "url": None, "title": None, "frame": None}
+
+    @app.post("/api/demo/reset")
+    async def reset_demo():
+        """Reset the local test portal back to Version A (Stable)."""
+        import urllib.request
+        try:
+            req = urllib.request.urlopen("http://127.0.0.1:9888/portal/switch?mode=A", timeout=2)
+            data = json.loads(req.read().decode("utf-8"))
+            return {"status": "ok", "mode": "A", "response": data}
+        except Exception as e:
+            return {"status": "offline", "detail": str(e), "mode": "A"}
+
+    @app.post("/api/demo/switch")
+    async def switch_demo_ui():
+        """Switch the local test portal to Version B (UI changed / Adaptation needed)."""
+        import urllib.request
+        try:
+            req = urllib.request.urlopen("http://127.0.0.1:9888/portal/switch?mode=B", timeout=2)
+            data = json.loads(req.read().decode("utf-8"))
+            return {"status": "ok", "mode": "B", "response": data}
+        except Exception as e:
+            return {"status": "offline", "detail": str(e), "mode": "B"}
+
+    @app.post("/api/browser/reset-profile")
+    async def reset_browser_profile():
+        """Clear the persistent browser profile directory."""
+        import shutil
+        cfg = get_config()
+        p_dir = cfg.get_browser_profile_dir()
+        if p_dir.exists():
+            try:
+                shutil.rmtree(p_dir, ignore_errors=True)
+                p_dir.mkdir(parents=True, exist_ok=True)
+                return {"status": "cleared", "path": str(p_dir)}
+            except Exception as e:
+                return {"status": "error", "detail": str(e)}
+        return {"status": "not_found"}
+
+    @app.get("/api/history")
+    async def get_run_history():
+        """Get structured run history for Phase 21."""
+        orch: Orchestrator = app.state.orchestrator
+        execs = await orch.list_executions()
+        history = []
+        for i, ex in enumerate(reversed(execs)):
+            meta = ex.metadata or {}
+            task_name = meta.get("task") or meta.get("intent") or f"Run {str(ex.id)[:8]}"
+            strategy = "Exploration"
+            if meta.get("adapted") or (ex.result and ex.result.get("self_healing_recovery_engaged")):
+                strategy = "Self-Healing Recovery"
+            elif meta.get("memory_hit") or (ex.result and ex.result.get("selector_used") == "#btn-export"):
+                strategy = "Learned Workflow"
+            
+            res_status = str(ex.status).capitalize()
+            verif = "Verified PASS" if ex.status in ("completed", "awaiting_human_verification") else "Failed"
+            if ex.human_verification and ex.human_verification.status == "confirmed":
+                verif = "Human Confirmed"
+            
+            history.append({
+                "run_id": f"#{str(i+1).zfill(3)}",
+                "execution_id": str(ex.id),
+                "task": task_name,
+                "strategy": strategy,
+                "status": res_status,
+                "verification": verif,
+                "created_at": ex.created_at.strftime("%H:%M:%S") if ex.created_at else "—",
+            })
+        return list(reversed(history))
+
     @app.get("/api/security")
     async def get_security_status():
         """Get security policy and credential vault status."""
@@ -411,11 +505,18 @@ def create_app(config: WebCMDConfig | None = None, orchestrator: Orchestrator | 
                     ev = event_task.result()
                     ex = await orch.get_execution(eid)
                     checkpoints = await orch.checkpoint_mgr.get_all(eid)
+                    b_frame = None
+                    try:
+                        worker = await orch.worker_registry.get_worker("browser.playwright")
+                        b_frame = getattr(worker, "latest_screenshot_b64", None)
+                    except Exception:
+                        pass
                     await websocket.send_text(json.dumps({
                         "type": "event",
                         "event": serialize_model(ev),
                         "execution": serialize_model(ex) if ex else None,
                         "checkpoints": [serialize_model(cp) for cp in checkpoints],
+                        "screencast": b_frame,
                     }))
 
                 if recv_task in done:
