@@ -54,7 +54,7 @@
     "benchmark": "uv run python benchmarks/scripts/run_eval.py",
     "dev": "tsx src/main.ts",
     "dev:bun": "bun src/main.ts",
-    "build": "npm run clean-dist && npm run copy-yaml && npm run compile && npm run build-manifest",
+    "build": "npm run clean-dist && npm run copy-yaml && npm run compile && npm run build-manifest && node scripts/prepare-deploy.mjs",
     "compile": "tsc --build && node -e \"require('fs').chmodSync('dist/src/main.js', 0o755)\"",
     "build-manifest": "tsx src/build-manifest.ts",
     "check:codex-plugin": "node scripts/check-codex-plugin.mjs",
