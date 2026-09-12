@@ -52,11 +52,24 @@ const stageDetailTitle = document.getElementById("stage-detail-title");
 const stageDetailContent = document.getElementById("stage-detail-content");
 const btnCloseStageDetail = document.getElementById("btn-close-stage-detail");
 
-// Screencast & Browser Elements
+// Screencast & Browser Interactive Elements
+const liveBrowserCard = document.getElementById("live-browser-card");
+const heroSplitWorkspace = document.querySelector(".hero-split-workspace");
+const browserViewport = document.getElementById("browser-viewport");
 const browserViewportImg = document.getElementById("browser-viewport-img");
 const browserPlaceholder = document.getElementById("browser-placeholder");
 const browserLiveUrl = document.getElementById("browser-live-url");
 const browserStatusTag = document.getElementById("browser-status-tag");
+const btnToggleExpand = document.getElementById("btn-toggle-expand");
+const btnFullscreenBrowser = document.getElementById("btn-fullscreen-browser");
+const browserInteractiveBar = document.getElementById("browser-interactive-bar");
+const btnMediaPlayPause = document.getElementById("btn-media-play-pause");
+const btnMediaRewind = document.getElementById("btn-media-rewind");
+const btnMediaForward = document.getElementById("btn-media-forward");
+const btnMediaMute = document.getElementById("btn-media-mute");
+const btnScrollUp = document.getElementById("btn-scroll-up");
+const btnScrollDown = document.getElementById("btn-scroll-down");
+const clickRipple = document.getElementById("click-ripple");
 
 // Chat Stream Elements
 const chatMessagesContainer = document.getElementById("chat-messages-container");
@@ -282,6 +295,209 @@ function bindEvents() {
       }
     });
   }
+
+  // Viewport Expand Toggle
+  if (btnToggleExpand && heroSplitWorkspace) {
+    btnToggleExpand.addEventListener("click", () => {
+      heroSplitWorkspace.classList.toggle("expanded-browser");
+      const isExpanded = heroSplitWorkspace.classList.contains("expanded-browser");
+      btnToggleExpand.innerHTML = isExpanded ? "&#9638; Compact" : "&#9638; Expand";
+      btnToggleExpand.title = isExpanded ? "Return to standard split" : "Focus on larger browser viewport";
+    });
+  }
+
+  // Viewport Fullscreen Toggle
+  if (btnFullscreenBrowser) {
+    btnFullscreenBrowser.addEventListener("click", toggleBrowserFullscreen);
+  }
+
+  // Interactive Media Controls
+  if (btnMediaPlayPause) {
+    btnMediaPlayPause.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/browser/media/toggle-play", { method: "POST" });
+        const d = await res.json();
+        if (d.frame && browserViewportImg) {
+          browserViewportImg.src = "data:image/jpeg;base64," + d.frame;
+        }
+        addLog("Media", "Toggled video playback.");
+      } catch (e) {
+        console.warn("Play/pause error:", e);
+      }
+    });
+  }
+
+  if (btnMediaRewind) {
+    btnMediaRewind.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/browser/media/seek", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seconds: -10 }),
+        });
+        const d = await res.json();
+        if (d.frame && browserViewportImg) {
+          browserViewportImg.src = "data:image/jpeg;base64," + d.frame;
+        }
+      } catch (e) {}
+    });
+  }
+
+  if (btnMediaForward) {
+    btnMediaForward.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/browser/media/seek", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ seconds: 10 }),
+        });
+        const d = await res.json();
+        if (d.frame && browserViewportImg) {
+          browserViewportImg.src = "data:image/jpeg;base64," + d.frame;
+        }
+      } catch (e) {}
+    });
+  }
+
+  if (btnMediaMute) {
+    btnMediaMute.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/browser/media/toggle-mute", { method: "POST" });
+        const d = await res.json();
+        const isMuted = d.result?.muted;
+        btnMediaMute.innerHTML = isMuted ? "&#128263; Unmute" : "&#128266; Mute";
+      } catch (e) {}
+    });
+  }
+
+  if (btnScrollUp) {
+    btnScrollUp.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/browser/scroll", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ delta_x: 0, delta_y: -400 }),
+        });
+        const d = await res.json();
+        if (d.frame && browserViewportImg) {
+          browserViewportImg.src = "data:image/jpeg;base64," + d.frame;
+        }
+      } catch (e) {}
+    });
+  }
+
+  if (btnScrollDown) {
+    btnScrollDown.addEventListener("click", async () => {
+      try {
+        const res = await fetch("/api/browser/scroll", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ delta_x: 0, delta_y: 400 }),
+        });
+        const d = await res.json();
+        if (d.frame && browserViewportImg) {
+          browserViewportImg.src = "data:image/jpeg;base64," + d.frame;
+        }
+      } catch (e) {}
+    });
+  }
+
+  // Direct Viewport Click Interaction
+  if (browserViewportImg) {
+    browserViewportImg.addEventListener("click", async (e) => {
+      const rect = browserViewportImg.getBoundingClientRect();
+      if (rect.width <= 0 || rect.height <= 0) return;
+      const scaleX = 1280 / rect.width;
+      const scaleY = 800 / rect.height;
+      const x = Math.round((e.clientX - rect.left) * scaleX);
+      const y = Math.round((e.clientY - rect.top) * scaleY);
+
+      showClickRipple(e.clientX - rect.left, e.clientY - rect.top);
+
+      try {
+        const res = await fetch("/api/browser/click", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ x, y, button: "left" }),
+        });
+        const d = await res.json();
+        if (d.frame) {
+          browserViewportImg.src = "data:image/jpeg;base64," + d.frame;
+        }
+      } catch (err) {
+        console.warn("Click forwarding error:", err);
+      }
+    });
+  }
+
+  // Direct Viewport Mouse Wheel Scroll
+  let wheelThrottleTimer = null;
+  if (browserViewport) {
+    browserViewport.addEventListener("wheel", (e) => {
+      if (!browserViewportImg || browserViewportImg.style.display === "none") return;
+      e.preventDefault();
+      if (wheelThrottleTimer) return;
+      wheelThrottleTimer = setTimeout(() => { wheelThrottleTimer = null; }, 180);
+
+      const deltaY = e.deltaY > 0 ? 350 : -350;
+      fetch("/api/browser/scroll", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ delta_x: 0, delta_y: deltaY }),
+      })
+      .then(r => r.json())
+      .then(d => {
+        if (d.frame && browserViewportImg) {
+          browserViewportImg.src = "data:image/jpeg;base64," + d.frame;
+        }
+      })
+      .catch(() => {});
+    }, { passive: false });
+  }
+}
+
+function toggleBrowserFullscreen() {
+  if (!liveBrowserCard) return;
+  const isFs = liveBrowserCard.classList.contains("fullscreen-mode") || document.fullscreenElement === liveBrowserCard;
+  if (!isFs) {
+    liveBrowserCard.classList.add("fullscreen-mode");
+    if (btnFullscreenBrowser) btnFullscreenBrowser.innerHTML = "&#10005; Exit Fullscreen";
+    if (liveBrowserCard.requestFullscreen) {
+      liveBrowserCard.requestFullscreen().catch(() => {});
+    }
+  } else {
+    liveBrowserCard.classList.remove("fullscreen-mode");
+    if (btnFullscreenBrowser) btnFullscreenBrowser.innerHTML = "&#9974; Fullscreen";
+    if (document.fullscreenElement && document.exitFullscreen) {
+      document.exitFullscreen().catch(() => {});
+    }
+  }
+}
+
+document.addEventListener("fullscreenchange", () => {
+  if (!document.fullscreenElement && liveBrowserCard) {
+    liveBrowserCard.classList.remove("fullscreen-mode");
+    if (btnFullscreenBrowser) btnFullscreenBrowser.innerHTML = "&#9974; Fullscreen";
+  }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape" && liveBrowserCard && liveBrowserCard.classList.contains("fullscreen-mode")) {
+    toggleBrowserFullscreen();
+  }
+});
+
+function showClickRipple(relX, relY) {
+  if (!clickRipple) return;
+  clickRipple.style.left = `${relX}px`;
+  clickRipple.style.top = `${relY}px`;
+  clickRipple.style.display = "block";
+  clickRipple.classList.remove("animating");
+  void clickRipple.offsetWidth;
+  clickRipple.classList.add("animating");
+  setTimeout(() => {
+    clickRipple.style.display = "none";
+  }, 500);
 }
 
 async function checkHealthAndSync() {

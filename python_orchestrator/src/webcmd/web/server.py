@@ -53,6 +53,21 @@ class RejectRequest(BaseModel):
     verified_by: str = Field(default="web_operator", description="Operator identity rejecting result")
 
 
+class BrowserClickRequest(BaseModel):
+    x: int = Field(..., description="X coordinate in browser viewport (1280 base)")
+    y: int = Field(..., description="Y coordinate in browser viewport (800 base)")
+    button: str = Field(default="left", description="Mouse button: left, right, middle")
+
+
+class BrowserScrollRequest(BaseModel):
+    delta_x: int = Field(default=0, description="Horizontal scroll delta")
+    delta_y: int = Field(default=300, description="Vertical scroll delta")
+
+
+class MediaSeekRequest(BaseModel):
+    seconds: float = Field(default=10.0, description="Seconds to seek forward (+) or backward (-)")
+
+
 def serialize_model(obj: Any) -> Any:
     """Helper to cleanly serialize Pydantic models or datetimes to JSON-compatible dicts."""
     if hasattr(obj, "model_dump"):
@@ -376,6 +391,113 @@ def create_app(config: WebCMDConfig | None = None, orchestrator: Orchestrator | 
             }
         except Exception:
             return {"active": False, "url": None, "title": None, "frame": None}
+
+    @app.post("/api/browser/click")
+    async def browser_click(req: BrowserClickRequest):
+        """Click at specific (x, y) coordinates in the live Chromium browser."""
+        orch: Orchestrator = app.state.orchestrator
+        try:
+            worker = await orch.worker_registry.get_worker("browser.playwright")
+            if hasattr(worker, "_page") and worker._page and not worker._page.is_closed():
+                await worker._page.mouse.click(req.x, req.y, button=req.button)
+                await asyncio.sleep(0.3)
+                frame = None
+                if hasattr(worker, "capture_live_frame"):
+                    frame = await worker.capture_live_frame()
+                return {"status": "ok", "x": req.x, "y": req.y, "frame": frame}
+            return {"status": "no_active_page"}
+        except Exception as e:
+            return {"status": "error", "detail": str(e)}
+
+    @app.post("/api/browser/scroll")
+    async def browser_scroll(req: BrowserScrollRequest):
+        """Scroll the live Chromium browser viewport."""
+        orch: Orchestrator = app.state.orchestrator
+        try:
+            worker = await orch.worker_registry.get_worker("browser.playwright")
+            if hasattr(worker, "_page") and worker._page and not worker._page.is_closed():
+                await worker._page.mouse.wheel(req.delta_x, req.delta_y)
+                await asyncio.sleep(0.2)
+                frame = None
+                if hasattr(worker, "capture_live_frame"):
+                    frame = await worker.capture_live_frame()
+                return {"status": "ok", "delta_y": req.delta_y, "frame": frame}
+            return {"status": "no_active_page"}
+        except Exception as e:
+            return {"status": "error", "detail": str(e)}
+
+    @app.post("/api/browser/media/toggle-play")
+    async def media_toggle_play():
+        """Toggle video play / pause state in the live browser."""
+        orch: Orchestrator = app.state.orchestrator
+        try:
+            worker = await orch.worker_registry.get_worker("browser.playwright")
+            if hasattr(worker, "_page") and worker._page and not worker._page.is_closed():
+                res = await worker._page.evaluate("""() => {
+                    const v = document.querySelector('video');
+                    if (v) {
+                        if (v.paused) {
+                            v.play();
+                            return { success: true, paused: false };
+                        } else {
+                            v.pause();
+                            return { success: true, paused: true };
+                        }
+                    }
+                    return { success: false, reason: 'no_video' };
+                }""")
+                await asyncio.sleep(0.3)
+                frame = None
+                if hasattr(worker, "capture_live_frame"):
+                    frame = await worker.capture_live_frame()
+                return {"status": "ok", "result": res, "frame": frame}
+            return {"status": "no_active_page"}
+        except Exception as e:
+            return {"status": "error", "detail": str(e)}
+
+    @app.post("/api/browser/media/toggle-mute")
+    async def media_toggle_mute():
+        """Toggle video audio mute state."""
+        orch: Orchestrator = app.state.orchestrator
+        try:
+            worker = await orch.worker_registry.get_worker("browser.playwright")
+            if hasattr(worker, "_page") and worker._page and not worker._page.is_closed():
+                res = await worker._page.evaluate("""() => {
+                    const v = document.querySelector('video');
+                    if (v) {
+                        v.muted = !v.muted;
+                        return { success: true, muted: v.muted };
+                    }
+                    return { success: false };
+                }""")
+                return {"status": "ok", "result": res}
+            return {"status": "no_active_page"}
+        except Exception as e:
+            return {"status": "error", "detail": str(e)}
+
+    @app.post("/api/browser/media/seek")
+    async def media_seek(req: MediaSeekRequest):
+        """Seek forward or backward in video playback."""
+        orch: Orchestrator = app.state.orchestrator
+        try:
+            worker = await orch.worker_registry.get_worker("browser.playwright")
+            if hasattr(worker, "_page") and worker._page and not worker._page.is_closed():
+                res = await worker._page.evaluate("""(delta) => {
+                    const v = document.querySelector('video');
+                    if (v) {
+                        v.currentTime = Math.max(0, Math.min(v.duration || Infinity, v.currentTime + delta));
+                        return { success: true, currentTime: v.currentTime };
+                    }
+                    return { success: false };
+                }""", req.seconds)
+                await asyncio.sleep(0.2)
+                frame = None
+                if hasattr(worker, "capture_live_frame"):
+                    frame = await worker.capture_live_frame()
+                return {"status": "ok", "result": res, "frame": frame}
+            return {"status": "no_active_page"}
+        except Exception as e:
+            return {"status": "error", "detail": str(e)}
 
     @app.post("/api/demo/reset")
     async def reset_demo():

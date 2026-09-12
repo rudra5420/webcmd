@@ -145,8 +145,8 @@
       </div>
 
       <!-- Right Column: Real Live Browser Panel (Phase 1 & 9) -->
-      <div class="workspace-right">
-        <section class="card live-browser-card">
+      <div class="workspace-right" id="workspace-right">
+        <section class="card live-browser-card" id="live-browser-card">
           <div class="browser-window-header">
             <div class="window-controls">
               <span class="control-dot red"></span>
@@ -157,10 +157,29 @@
               <span class="padlock-icon">&#128274;</span>
               <span class="browser-url-text" id="browser-live-url">about:blank</span>
             </div>
-            <div class="browser-status-tag" id="browser-status-tag">Chromium Ready</div>
+            <div class="browser-header-actions">
+              <div class="browser-status-tag" id="browser-status-tag">Chromium Ready</div>
+              <button type="button" class="btn-browser-tool" id="btn-toggle-expand" title="Toggle Wider Browser View (Perplexity-style focus)">&#9638; Expand</button>
+              <button type="button" class="btn-browser-tool btn-tool-primary" id="btn-fullscreen-browser" title="Toggle Fullscreen Mode (Enjoy uninterrupted YouTube)">&#9974; Fullscreen</button>
+            </div>
           </div>
           <div class="browser-viewport" id="browser-viewport">
+            <!-- Floating Interactive Control Toolbar -->
+            <div class="browser-interactive-bar" id="browser-interactive-bar">
+              <button type="button" class="btn-interact btn-interact-play" id="btn-media-play-pause" title="Play / Pause Video (Space)">&#9654;&#10074;&#10074; Play / Pause</button>
+              <button type="button" class="btn-interact" id="btn-media-rewind" title="Rewind 10s">&#9194; -10s</button>
+              <button type="button" class="btn-interact" id="btn-media-forward" title="Forward 10s">&#9193; +10s</button>
+              <button type="button" class="btn-interact" id="btn-media-mute" title="Toggle Mute">&#128266; Mute</button>
+              <div class="bar-separator"></div>
+              <button type="button" class="btn-interact" id="btn-scroll-up" title="Scroll Up (Arrow Up)">&#8593; Up</button>
+              <button type="button" class="btn-interact" id="btn-scroll-down" title="Scroll Down (Arrow Down)">&#8595; Down</button>
+              <div class="bar-separator"></div>
+              <span class="interact-hint">&#128430; Click anywhere on screen to control browser directly</span>
+            </div>
+
             <img id="browser-viewport-img" src="" alt="Live Browser Viewport" style="display:none;" />
+            <div class="click-ripple" id="click-ripple" style="display:none;"></div>
+
             <div class="browser-placeholder" id="browser-placeholder">
               <div class="browser-icon">&#127760;</div>
               <div class="placeholder-title">Real Chromium Browser Session</div>
